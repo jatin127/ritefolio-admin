@@ -6,8 +6,7 @@ import { SwitchProps, useSwitch } from "@heroui/switch";
 import { useTheme } from "next-themes";
 import { useIsSSR } from "@react-aria/ssr";
 import clsx from "clsx";
-
-import { SunFilledIcon, MoonFilledIcon } from "@/components/icons";
+import { IoMoon, IoSunny } from "react-icons/io5";
 
 export interface ThemeSwitchProps {
   className?: string;
@@ -44,7 +43,7 @@ export const ThemeSwitch: FC<ThemeSwitchProps> = ({
         className: clsx(
           "px-px transition-opacity hover:opacity-80 cursor-pointer",
           className,
-          classNames?.base,
+          classNames?.base
         ),
       })}
     >
@@ -66,15 +65,13 @@ export const ThemeSwitch: FC<ThemeSwitchProps> = ({
               "px-0",
               "mx-0",
             ],
-            classNames?.wrapper,
+            classNames?.wrapper
           ),
         })}
       >
-        {!isSelected || isSSR ? (
-          <SunFilledIcon size={22} />
-        ) : (
-          <MoonFilledIcon size={22} />
-        )}
+        <div className="border border-default-200 rounded-full p-2">
+          {!isSelected || isSSR ? <IoSunny size={16} /> : <IoMoon size={16} />}
+        </div>
       </div>
     </Component>
   );
