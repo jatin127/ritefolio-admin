@@ -1,35 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryDB, callFunction } from "@/utils/db";
 
-interface Currency {
+interface Country {
   Id: number;
   Name: string;
+  IsoCode: string;
+  CurrencyName: string;
   CurrencyCode: string;
   CurrencySymbol: string;
+  CountryCode: number;
   IsActive: boolean;
-  CreatedOn?: number;
-  UpdatedOn?: number;
 }
 
-// GET: Fetch a single currency by ID using FetchCurrencies function
+// GET: Fetch a single country by ID
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const id = parseInt(params.id);
+    const id = params.id;
 
-    const currencies = await callFunction<Currency>({
-      functionName: 'public."FetchCurrencies"',
+    const countries = await callFunction<Country>({
+      functionName: 'public."FetchCountries"',
       dbName: process.env.PG_DEFAULT_DB,
-      params: [id, null, null, null],
+      params: [],
     });
 
-    if (currencies.length === 0) {
+    const country = countries.find((c) => c.Id === parseInt(id));
+
+    if (!country) {
       return NextResponse.json(
         {
           success: false,
-          error: "Currency not found",
+          error: "Country not found",
         },
         { status: 404 }
       );
@@ -38,16 +41,16 @@ export async function GET(
     return NextResponse.json(
       {
         success: true,
-        data: currencies[0],
+        data: country,
       },
       { status: 200 }
     );
   } catch (error) {
-    console.error("Error fetching currency:", error);
+    console.error("Error fetching country:", error);
     return NextResponse.json(
       {
         success: false,
-        error: "Failed to fetch currency",
+        error: "Failed to fetch country",
         message: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
@@ -55,7 +58,7 @@ export async function GET(
   }
 }
 
-// PUT: Update a currency
+// PUT: Update a country
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -63,43 +66,65 @@ export async function PUT(
   try {
     const id = params.id;
     const body = await request.json();
-    const { name, currencyCode, currencySymbol, isActive } = body;
+    const { name, isoCode, currencyCode, countryCode, isActive } = body;
 
     // Validation
-    if (!name || !currencyCode || !currencySymbol) {
+    if (!name || !isoCode || !currencyCode || countryCode === undefined) {
       return NextResponse.json(
         {
           success: false,
           error: "Missing required fields",
-          message: "Name, currencyCode, and currencySymbol are required",
+          message:
+            "Name, isoCode, currencyCode, and countryCode are required",
         },
         { status: 400 }
       );
     }
 
+    // First, get the currency ID
+    const currencyResult = await queryDB<{ Id: number }>({
+      query: `SELECT "Id" FROM public."CurrencyMaster" WHERE "CurrencyCode" = $1`,
+      dbName: process.env.PG_DEFAULT_DB,
+      params: [currencyCode],
+    });
+
+    if (currencyResult.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid currency code",
+          message: "Please update the value in Currency Table.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const currencyId = currencyResult[0].Id;
+
+    // Update the country
     await queryDB({
       query: `
-        UPDATE public."CurrencyMaster"
-        SET "Name" = $1, "CurrencyCode" = $2, "CurrencySymbol" = $3, "IsActive" = $4, "UpdatedAt" = NOW()
-        WHERE "Id" = $5
+        UPDATE public."Country"
+        SET "Name" = $1, "IsoCode" = $2, "CurrencyId" = $3, "CountryCode" = $4, "IsActive" = $5, "UpdatedAt" = NOW()
+        WHERE "Id" = $6
       `,
       dbName: process.env.PG_DEFAULT_DB,
-      params: [name, currencyCode, currencySymbol, isActive, id],
+      params: [name, isoCode, currencyId, countryCode, isActive, id],
     });
 
     return NextResponse.json(
       {
         success: true,
-        message: "Currency updated successfully",
+        message: "Country updated successfully",
       },
       { status: 200 }
     );
   } catch (error) {
-    console.error("Error updating currency:", error);
+    console.error("Error updating country:", error);
     return NextResponse.json(
       {
         success: false,
-        error: "Failed to update currency",
+        error: "Failed to update country",
         message: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
@@ -107,7 +132,7 @@ export async function PUT(
   }
 }
 
-// DELETE: Delete a currency
+// DELETE: Delete a country
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -116,7 +141,7 @@ export async function DELETE(
     const id = params.id;
 
     await queryDB({
-      query: `DELETE FROM public."CurrencyMaster" WHERE "Id" = $1`,
+      query: `DELETE FROM public."Country" WHERE "Id" = $1`,
       dbName: process.env.PG_DEFAULT_DB,
       params: [id],
     });
@@ -124,16 +149,16 @@ export async function DELETE(
     return NextResponse.json(
       {
         success: true,
-        message: "Currency deleted successfully",
+        message: "Country deleted successfully",
       },
       { status: 200 }
     );
   } catch (error) {
-    console.error("Error deleting currency:", error);
+    console.error("Error deleting country:", error);
     return NextResponse.json(
       {
         success: false,
-        error: "Failed to delete currency",
+        error: "Failed to delete country",
         message: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }

@@ -18,6 +18,7 @@ import {
   FiTool,
   FiChevronDown,
   FiDollarSign,
+  FiGlobe,
 } from "react-icons/fi";
 
 interface NavigationItem {
@@ -91,6 +92,11 @@ const navigationConfig: NavigationConfig = [
     label: "Currency",
     href: "/currency",
     icon: <FiDollarSign className="text-xl" />,
+  },
+  {
+    label: "Country",
+    href: "/country",
+    icon: <FiGlobe className="text-xl" />,
   },
   {
     label: "Users",

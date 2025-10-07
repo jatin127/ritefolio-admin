@@ -1,21 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callProcedure, callFunction } from "@/utils/db";
 
-interface Currency {
+interface Country {
   Id: number;
   Name: string;
+  IsoCode: string;
+  CurrencyName: string;
   CurrencyCode: string;
   CurrencySymbol: string;
+  CountryCode: number;
   IsActive: boolean;
-  CreatedOn?: number;
-  UpdatedOn?: number;
 }
 
-// GET: Fetch all currencies using FetchCurrencies function
+// GET: Fetch all countries using FetchCountries function
 export async function GET() {
   try {
-    const currencies = await callFunction<Currency>({
-      functionName: 'public."FetchCurrencies"',
+    const countries = await callFunction<Country>({
+      functionName: 'public."FetchCountries"',
       dbName: process.env.PG_DEFAULT_DB,
       params: [],
     });
@@ -23,16 +24,16 @@ export async function GET() {
     return NextResponse.json(
       {
         success: true,
-        data: currencies,
+        data: countries,
       },
       { status: 200 }
     );
   } catch (error) {
-    console.error("Error fetching currencies:", error);
+    console.error("Error fetching countries:", error);
     return NextResponse.json(
       {
         success: false,
-        error: "Failed to fetch currencies",
+        error: "Failed to fetch countries",
         message: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
@@ -40,44 +41,51 @@ export async function GET() {
   }
 }
 
-// POST: Create a new currency
+// POST: Create a new country using InsertCountry procedure
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, currencyCode, currencySymbol, isActive = true } = body;
+    const {
+      name,
+      isoCode,
+      currencyCode,
+      countryCode,
+      isActive = true,
+    } = body;
 
     // Validation
-    if (!name || !currencyCode || !currencySymbol) {
+    if (!name || !isoCode || !currencyCode || countryCode === undefined) {
       return NextResponse.json(
         {
           success: false,
           error: "Missing required fields",
-          message: "Name, currencyCode, and currencySymbol are required",
+          message:
+            "Name, isoCode, currencyCode, and countryCode are required",
         },
         { status: 400 }
       );
     }
 
-    // Call the InsertCurrency procedure
+    // Call the InsertCountry procedure
     await callProcedure({
-      procedureName: 'public."InsertCurrency"',
+      procedureName: 'public."InsertCountry"',
       dbName: process.env.PG_DEFAULT_DB,
-      params: [name, currencyCode, currencySymbol, isActive],
+      params: [name, isoCode, currencyCode, countryCode, isActive],
     });
 
     return NextResponse.json(
       {
         success: true,
-        message: "Currency created successfully",
+        message: "Country created successfully",
       },
       { status: 201 }
     );
   } catch (error) {
-    console.error("Error creating currency:", error);
+    console.error("Error creating country:", error);
     return NextResponse.json(
       {
         success: false,
-        error: "Failed to create currency",
+        error: "Failed to create country",
         message: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
