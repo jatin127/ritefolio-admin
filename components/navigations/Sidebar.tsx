@@ -17,6 +17,7 @@ import {
   FiShield,
   FiTool,
   FiChevronDown,
+  FiDollarSign,
 } from "react-icons/fi";
 
 interface NavigationItem {
@@ -85,6 +86,11 @@ const navigationConfig: NavigationConfig = [
     label: "Analytics",
     href: "/dashboard/analytics",
     icon: <FiBarChart2 className="text-xl" />,
+  },
+  {
+    label: "Currency",
+    href: "/currency",
+    icon: <FiDollarSign className="text-xl" />,
   },
   {
     label: "Users",
