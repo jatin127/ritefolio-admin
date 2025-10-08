@@ -1,25 +1,26 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import NextLink from "next/link";
 import { Accordion, AccordionItem } from "@heroui/accordion";
+import { Button } from "@heroui/button";
 import { createClient } from "@/lib/supabase/client";
+import { ThemeSwitch } from "@/components/ThemeSwitch";
 import {
   FiHome,
-  FiUsers,
   FiSettings,
   FiFileText,
-  FiBarChart2,
   FiFolder,
-  FiImage,
-  FiMail,
   FiShield,
   FiTool,
   FiChevronDown,
   FiDollarSign,
   FiGlobe,
+  FiLogOut,
+  FiPieChart,
 } from "react-icons/fi";
+import { LiaExchangeAltSolid } from "react-icons/lia";
 
 interface NavigationItem {
   label: string;
@@ -42,53 +43,6 @@ const navigationConfig: NavigationConfig = [
     icon: <FiHome className="text-xl" />,
   },
   {
-    label: "Portfolio",
-    icon: <FiFolder className="text-xl" />,
-    items: [
-      {
-        label: "Projects",
-        href: "/dashboard/projects",
-        icon: <FiFileText className="text-lg" />,
-      },
-      {
-        label: "Media",
-        href: "/dashboard/media",
-        icon: <FiImage className="text-lg" />,
-      },
-      {
-        label: "Categories",
-        href: "/dashboard/categories",
-        icon: <FiFolder className="text-lg" />,
-      },
-    ],
-  },
-  {
-    label: "Content",
-    icon: <FiFileText className="text-xl" />,
-    items: [
-      {
-        label: "Pages",
-        href: "/dashboard/pages",
-        icon: <FiFileText className="text-lg" />,
-      },
-      {
-        label: "Blog Posts",
-        href: "/dashboard/blog",
-        icon: <FiFileText className="text-lg" />,
-      },
-      {
-        label: "Testimonials",
-        href: "/dashboard/testimonials",
-        icon: <FiMail className="text-lg" />,
-      },
-    ],
-  },
-  {
-    label: "Analytics",
-    href: "/dashboard/analytics",
-    icon: <FiBarChart2 className="text-xl" />,
-  },
-  {
     label: "Currency",
     href: "/currency",
     icon: <FiDollarSign className="text-xl" />,
@@ -99,9 +53,25 @@ const navigationConfig: NavigationConfig = [
     icon: <FiGlobe className="text-xl" />,
   },
   {
-    label: "Users",
-    href: "/dashboard/users",
-    icon: <FiUsers className="text-xl" />,
+    label: "Exchange",
+    href: "/exchange",
+    icon: <LiaExchangeAltSolid className="text-xl" />,
+  },
+  {
+    label: "Investment",
+    icon: <FiPieChart className="text-xl" />,
+    items: [
+      {
+        label: "Segment",
+        href: "/investment/segment",
+        icon: <FiFolder className="text-lg" />,
+      },
+      {
+        label: "Type",
+        href: "/investment/type",
+        icon: <FiFileText className="text-lg" />,
+      },
+    ],
   },
   {
     label: "System",
@@ -134,8 +104,12 @@ interface SidebarProps {
 
 export const Sidebar = ({ isOpen = true, onClose }: SidebarProps) => {
   const pathname = usePathname();
+  const router = useRouter();
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set(["0"]));
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userEmail, setUserEmail] = useState<string>("");
+  const [userName, setUserName] = useState<string>("");
+  const [userInitials, setUserInitials] = useState<string>("A");
   const supabase = createClient();
 
   useEffect(() => {
@@ -144,6 +118,29 @@ export const Sidebar = ({ isOpen = true, onClose }: SidebarProps) => {
         data: { user },
       } = await supabase.auth.getUser();
       setIsAuthenticated(!!user);
+
+      if (user) {
+        setUserEmail(user.email || "");
+
+        // Get user name from user metadata or email
+        const fullName =
+          user.user_metadata?.full_name || user.user_metadata?.name || "";
+        setUserName(fullName);
+
+        // Calculate initials
+        if (fullName) {
+          const names = fullName.trim().split(" ");
+          const initials = names
+            .map((n: string) => n[0])
+            .join("")
+            .toUpperCase()
+            .slice(0, 2);
+          setUserInitials(initials);
+        } else if (user.email) {
+          // Use first letter of email if no name
+          setUserInitials(user.email[0].toUpperCase());
+        }
+      }
     };
 
     checkAuth();
@@ -153,6 +150,32 @@ export const Sidebar = ({ isOpen = true, onClose }: SidebarProps) => {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsAuthenticated(!!session?.user);
+
+      if (session?.user) {
+        setUserEmail(session.user.email || "");
+
+        const fullName =
+          session.user.user_metadata?.full_name ||
+          session.user.user_metadata?.name ||
+          "";
+        setUserName(fullName);
+
+        if (fullName) {
+          const names = fullName.trim().split(" ");
+          const initials = names
+            .map((n: string) => n[0])
+            .join("")
+            .toUpperCase()
+            .slice(0, 2);
+          setUserInitials(initials);
+        } else if (session.user.email) {
+          setUserInitials(session.user.email[0].toUpperCase());
+        }
+      } else {
+        setUserEmail("");
+        setUserName("");
+        setUserInitials("A");
+      }
     });
 
     return () => {
@@ -162,6 +185,16 @@ export const Sidebar = ({ isOpen = true, onClose }: SidebarProps) => {
 
   const isActive = (href: string) => {
     return pathname === href;
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setIsAuthenticated(false);
+    setUserEmail("");
+    setUserName("");
+    setUserInitials("A");
+    router.push("/");
+    router.refresh();
   };
 
   // Don't render sidebar if user is not logged in
@@ -254,8 +287,8 @@ export const Sidebar = ({ isOpen = true, onClose }: SidebarProps) => {
   return (
     <aside
       className={`
-        fixed left-0 top-[64px] bottom-0 w-64
-        bg-background border-r border-t border-default-200
+        fixed left-0 top-0 bottom-0 w-64
+        bg-background border-r border-default-200
         transition-transform duration-300 z-40
         ${isOpen ? "translate-x-0" : "-translate-x-full"}
         lg:translate-x-0 overflow-hidden
@@ -263,6 +296,9 @@ export const Sidebar = ({ isOpen = true, onClose }: SidebarProps) => {
     >
       <div className="flex flex-col h-full">
         {/* Sidebar Header */}
+        <div className="flex-shrink-0 px-6 py-4 border-b border-default-200">
+          <h1 className="text-xl font-bold text-foreground">Ritefolio Admin</h1>
+        </div>
 
         {/* Navigation Items - Scrollable */}
         <nav className="flex-1 overflow-y-auto px-4 py-4 space-y-1 scrollbar-thin scrollbar-thumb-default-300 scrollbar-track-transparent">
@@ -275,17 +311,30 @@ export const Sidebar = ({ isOpen = true, onClose }: SidebarProps) => {
         </nav>
 
         {/* Sidebar Footer - Fixed at bottom */}
-        <div className="flex-shrink-0 px-6 py-4 border-t border-default-200 bg-background">
+        <div className="flex-shrink-0 px-4 py-4 border-t border-default-200 bg-background space-y-3">
           <div className="flex items-center gap-3 p-3 rounded-lg bg-default-100">
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-bold">
-              A
+              {userInitials}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-foreground truncate">
-                Admin
+                {userName || "Admin"}
               </p>
-              <p className="text-xs text-default-500 truncate">Administrator</p>
+              <p className="text-xs text-default-500 truncate">{userEmail}</p>
             </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              color="danger"
+              variant="flat"
+              size="sm"
+              className="flex-1"
+              onPress={handleLogout}
+              startContent={<FiLogOut />}
+            >
+              Logout
+            </Button>
+            <ThemeSwitch />
           </div>
         </div>
       </div>

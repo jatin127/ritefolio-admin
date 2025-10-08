@@ -21,9 +21,12 @@ import {
 } from "@heroui/modal";
 import { Input } from "@heroui/input";
 import { Switch } from "@heroui/switch";
-import { Select, SelectItem } from "@heroui/select";
+import { Autocomplete, AutocompleteItem } from "@heroui/autocomplete";
 import { FiPlus, FiEdit2, FiTrash2 } from "react-icons/fi";
 import { createClient } from "@/lib/supabase/client";
+import { useFormik } from "formik";
+import * as Yup from "yup";
+import axiosInstance from "@/lib/axios";
 
 interface Country {
   Id: number;
@@ -52,6 +55,25 @@ interface CountryFormData {
   isActive: boolean;
 }
 
+// Validation Schema
+const countryValidationSchema = Yup.object({
+  name: Yup.string()
+    .required("Country name is required")
+    .min(2, "Name must be at least 2 characters")
+    .max(100, "Name must not exceed 100 characters"),
+  isoCode: Yup.string()
+    .required("ISO code is required")
+    .length(2, "ISO code must be exactly 2 characters")
+    .matches(/^[A-Z]{2}$/, "ISO code must contain only uppercase letters"),
+  currencyCode: Yup.string().required("Currency is required"),
+  countryCode: Yup.string()
+    .required("Country code is required")
+    .matches(/^[0-9]+$/, "Country code must contain only numbers")
+    .min(1, "Country code must be at least 1 digit")
+    .max(4, "Country code must not exceed 4 digits"),
+  isActive: Yup.boolean(),
+});
+
 export default function CountryPage() {
   const [countries, setCountries] = useState<Country[]>([]);
   const [currencies, setCurrencies] = useState<Currency[]>([]);
@@ -59,16 +81,45 @@ export default function CountryPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState<Country | null>(null);
-  const [formData, setFormData] = useState<CountryFormData>({
-    name: "",
-    isoCode: "",
-    currencyCode: "",
-    countryCode: "",
-    isActive: true,
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const router = useRouter();
   const supabase = createClient();
+
+  const formik = useFormik<CountryFormData>({
+    initialValues: {
+      name: "",
+      isoCode: "",
+      currencyCode: "",
+      countryCode: "",
+      isActive: true,
+    },
+    validationSchema: countryValidationSchema,
+    onSubmit: async (values) => {
+      try {
+        const payload = {
+          ...values,
+          countryCode: parseInt(values.countryCode),
+        };
+
+        const response = selectedCountry
+          ? await axiosInstance.put(`/country/${selectedCountry.Id}`, payload)
+          : await axiosInstance.post("/country", payload);
+
+        const result = response.data;
+
+        if (result.success) {
+          handleCloseModal();
+          fetchCountries();
+        } else {
+          console.error("Failed to save country:", result.error);
+          alert(`Error: ${result.message || result.error}`);
+        }
+      } catch (error) {
+        console.error("Error saving country:", error);
+        alert("Failed to save country");
+      }
+    },
+  });
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -91,8 +142,8 @@ export default function CountryPage() {
   const fetchCountries = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch("/api/country");
-      const result = await response.json();
+      const response = await axiosInstance.get("/country");
+      const result = response.data;
 
       if (result.success) {
         setCountries(result.data);
@@ -108,8 +159,8 @@ export default function CountryPage() {
 
   const fetchCurrencies = async () => {
     try {
-      const response = await fetch("/api/currency");
-      const result = await response.json();
+      const response = await axiosInstance.get("/currency");
+      const result = response.data;
 
       if (result.success) {
         setCurrencies(result.data.filter((c: Currency) => c.IsActive));
@@ -124,7 +175,7 @@ export default function CountryPage() {
   const handleOpenModal = (country?: Country) => {
     if (country) {
       setSelectedCountry(country);
-      setFormData({
+      formik.setValues({
         name: country.Name,
         isoCode: country.IsoCode,
         currencyCode: country.CurrencyCode,
@@ -133,13 +184,7 @@ export default function CountryPage() {
       });
     } else {
       setSelectedCountry(null);
-      setFormData({
-        name: "",
-        isoCode: "",
-        currencyCode: "",
-        countryCode: "",
-        isActive: true,
-      });
+      formik.resetForm();
     }
     setIsModalOpen(true);
   };
@@ -147,64 +192,19 @@ export default function CountryPage() {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedCountry(null);
-    setFormData({
-      name: "",
-      isoCode: "",
-      currencyCode: "",
-      countryCode: "",
-      isActive: true,
-    });
-  };
-
-  const handleSubmit = async () => {
-    try {
-      setIsSubmitting(true);
-
-      const url = selectedCountry
-        ? `/api/country/${selectedCountry.Id}`
-        : "/api/country";
-
-      const method = selectedCountry ? "PUT" : "POST";
-
-      const response = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ...formData,
-          countryCode: parseInt(formData.countryCode),
-        }),
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        handleCloseModal();
-        fetchCountries();
-      } else {
-        console.error("Failed to save country:", result.error);
-        alert(`Error: ${result.message || result.error}`);
-      }
-    } catch (error) {
-      console.error("Error saving country:", error);
-      alert("Failed to save country");
-    } finally {
-      setIsSubmitting(false);
-    }
+    formik.resetForm();
   };
 
   const handleDelete = async () => {
     if (!selectedCountry) return;
 
     try {
-      setIsSubmitting(true);
+      setIsDeleting(true);
 
-      const response = await fetch(`/api/country/${selectedCountry.Id}`, {
-        method: "DELETE",
-      });
-
-      const result = await response.json();
+      const response = await axiosInstance.delete(
+        `/country/${selectedCountry.Id}`
+      );
+      const result = response.data;
 
       if (result.success) {
         setIsDeleteModalOpen(false);
@@ -218,7 +218,7 @@ export default function CountryPage() {
       console.error("Error deleting country:", error);
       alert("Failed to delete country");
     } finally {
-      setIsSubmitting(false);
+      setIsDeleting(false);
     }
   };
 
@@ -325,84 +325,125 @@ export default function CountryPage() {
         {/* Add/Edit Modal */}
         <Modal isOpen={isModalOpen} onClose={handleCloseModal} size="2xl">
           <ModalContent>
-            <ModalHeader>
-              {selectedCountry ? "Edit Country" : "Add Country"}
-            </ModalHeader>
-            <ModalBody>
-              <div className="space-y-4">
-                <Input
-                  label="Name"
-                  placeholder="Enter country name"
-                  value={formData.name}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, name: value })
-                  }
-                  isRequired
-                />
-                <Input
-                  label="ISO Code"
-                  placeholder="Enter ISO code (e.g., IN, US)"
-                  value={formData.isoCode}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, isoCode: value.toUpperCase() })
-                  }
-                  maxLength={2}
-                  isRequired
-                />
-                <Input
-                  label="Country Code"
-                  placeholder="Enter country code (e.g., 91, 1)"
-                  type="number"
-                  value={formData.countryCode}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, countryCode: value })
-                  }
-                  isRequired
-                />
-                <Select
-                  label="Currency"
-                  placeholder="Select currency"
-                  selectedKeys={
-                    formData.currencyCode ? [formData.currencyCode] : []
-                  }
-                  onSelectionChange={(keys) => {
-                    const selected = Array.from(keys)[0] as string;
-                    setFormData({ ...formData, currencyCode: selected });
-                  }}
-                  isRequired
+            <form onSubmit={formik.handleSubmit}>
+              <ModalHeader>
+                {selectedCountry ? "Edit Country" : "Add Country"}
+              </ModalHeader>
+              <ModalBody>
+                <div className="space-y-4">
+                  <Input
+                    label="Name"
+                    placeholder="Enter country name"
+                    name="name"
+                    value={formik.values.name}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    isInvalid={formik.touched.name && !!formik.errors.name}
+                    errorMessage={formik.touched.name && formik.errors.name}
+                    isRequired
+                  />
+                  <Input
+                    label="ISO Code"
+                    placeholder="Enter ISO code (e.g., IN, US)"
+                    name="isoCode"
+                    value={formik.values.isoCode}
+                    onChange={(e) => {
+                      formik.setFieldValue(
+                        "isoCode",
+                        e.target.value.toUpperCase()
+                      );
+                    }}
+                    onBlur={formik.handleBlur}
+                    maxLength={2}
+                    isInvalid={
+                      formik.touched.isoCode && !!formik.errors.isoCode
+                    }
+                    errorMessage={
+                      formik.touched.isoCode && formik.errors.isoCode
+                    }
+                    isRequired
+                  />
+                  <Input
+                    label="Country Code"
+                    placeholder="Enter country code (e.g., 91, 1)"
+                    name="countryCode"
+                    value={formik.values.countryCode}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    isInvalid={
+                      formik.touched.countryCode && !!formik.errors.countryCode
+                    }
+                    errorMessage={
+                      formik.touched.countryCode && formik.errors.countryCode
+                    }
+                    isRequired
+                  />
+                  <Autocomplete
+                    label="Currency"
+                    placeholder="Search and select currency"
+                    name="currencyCode"
+                    selectedKey={formik.values.currencyCode || null}
+                    inputValue={
+                      formik.values.currencyCode
+                        ? (() => {
+                            const selected = currencies.find(
+                              (c) =>
+                                c.CurrencyCode === formik.values.currencyCode
+                            );
+                            return selected
+                              ? `${selected.Name} (${selected.CurrencyCode} - ${selected.CurrencySymbol})`
+                              : "";
+                          })()
+                        : ""
+                    }
+                    defaultItems={currencies}
+                    onSelectionChange={(key) => {
+                      formik.setFieldValue("currencyCode", key);
+                    }}
+                    onBlur={() => formik.setFieldTouched("currencyCode", true)}
+                    isInvalid={
+                      formik.touched.currencyCode &&
+                      !!formik.errors.currencyCode
+                    }
+                    errorMessage={
+                      formik.touched.currencyCode && formik.errors.currencyCode
+                    }
+                    isRequired
+                  >
+                    {(currency) => (
+                      <AutocompleteItem
+                        key={currency.CurrencyCode}
+                        textValue={currency.CurrencyCode}
+                      >
+                        {currency.Name} ({currency.CurrencyCode} -{" "}
+                        {currency.CurrencySymbol})
+                      </AutocompleteItem>
+                    )}
+                  </Autocomplete>
+                  <Switch
+                    name="isActive"
+                    isSelected={formik.values.isActive}
+                    onValueChange={(value) =>
+                      formik.setFieldValue("isActive", value)
+                    }
+                  >
+                    Active
+                  </Switch>
+                </div>
+              </ModalBody>
+              <ModalFooter>
+                <Button variant="light" onPress={handleCloseModal}>
+                  Cancel
+                </Button>
+                <Button
+                  color="primary"
+                  type="submit"
+                  isLoading={formik.isSubmitting}
                 >
-                  {currencies.map((currency) => (
-                    <SelectItem
-                      key={currency.CurrencyCode}
-                      value={currency.CurrencyCode}
-                    >
-                      {currency.Name} ({currency.CurrencyCode} -{" "}
-                      {currency.CurrencySymbol})
-                    </SelectItem>
-                  ))}
-                </Select>
-                <Switch
-                  isSelected={formData.isActive}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, isActive: value })
-                  }
-                >
-                  Active
-                </Switch>
-              </div>
-            </ModalBody>
-            <ModalFooter>
-              <Button variant="light" onPress={handleCloseModal}>
-                Cancel
-              </Button>
-              <Button
-                color="primary"
-                onPress={handleSubmit}
-                isLoading={isSubmitting}
-              >
-                {selectedCountry ? "Update" : "Create"}
-              </Button>
-            </ModalFooter>
+                  {selectedCountry ? "Update" : "Create"}
+                </Button>
+              </ModalFooter>
+            </form>
           </ModalContent>
         </Modal>
 
@@ -423,7 +464,7 @@ export default function CountryPage() {
               <Button
                 color="danger"
                 onPress={handleDelete}
-                isLoading={isSubmitting}
+                isLoading={isDeleting}
               >
                 Delete
               </Button>

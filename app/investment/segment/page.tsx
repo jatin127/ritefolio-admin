@@ -23,83 +23,75 @@ import { Input } from "@heroui/input";
 import { Switch } from "@heroui/switch";
 import { FiPlus, FiEdit2, FiTrash2 } from "react-icons/fi";
 import { createClient } from "@/lib/supabase/client";
-import axiosInstance from "@/lib/axios";
 import { useFormik } from "formik";
 import * as Yup from "yup";
+import axiosInstance from "@/lib/axios";
 
-interface Currency {
+interface InvestmentSegment {
   Id: number;
-  Name: string;
-  CurrencyCode: string;
-  CurrencySymbol: string;
+  Category: string;
+  Description: string;
   IsActive: boolean;
-  CreatedAt?: string;
-  UpdatedAt?: string;
 }
 
-interface CurrencyFormData {
-  name: string;
-  currencyCode: string;
-  currencySymbol: string;
+interface SegmentFormData {
+  category: string;
+  description: string;
   isActive: boolean;
 }
 
 // Validation Schema
-const currencyValidationSchema = Yup.object({
-  name: Yup.string()
-    .required("Currency name is required")
-    .min(2, "Name must be at least 2 characters")
-    .max(100, "Name must not exceed 100 characters"),
-  currencyCode: Yup.string()
-    .required("Currency code is required")
-    .min(2, "Currency code must be at least 2 characters")
-    .max(3, "Currency code must not exceed 3 characters")
-    .matches(/^[A-Z]+$/, "Currency code must contain only uppercase letters"),
-  currencySymbol: Yup.string()
-    .required("Currency symbol is required")
-    .min(1, "Currency symbol is required")
-    .max(5, "Currency symbol must not exceed 5 characters"),
+const segmentValidationSchema = Yup.object({
+  category: Yup.string()
+    .required("Category is required")
+    .min(2, "Category must be at least 2 characters")
+    .max(100, "Category must not exceed 100 characters"),
+  description: Yup.string().max(
+    500,
+    "Description must not exceed 500 characters"
+  ),
   isActive: Yup.boolean(),
 });
 
-export default function CurrencyPage() {
-  const [currencies, setCurrencies] = useState<Currency[]>([]);
+export default function InvestmentSegmentPage() {
+  const [segments, setSegments] = useState<InvestmentSegment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [selectedCurrency, setSelectedCurrency] = useState<Currency | null>(
-    null
-  );
+  const [selectedSegment, setSelectedSegment] =
+    useState<InvestmentSegment | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
-  const formik = useFormik<CurrencyFormData>({
+  const formik = useFormik<SegmentFormData>({
     initialValues: {
-      name: "",
-      currencyCode: "",
-      currencySymbol: "",
+      category: "",
+      description: "",
       isActive: true,
     },
-    validationSchema: currencyValidationSchema,
+    validationSchema: segmentValidationSchema,
     onSubmit: async (values) => {
       try {
-        const response = selectedCurrency
-          ? await axiosInstance.put(`/currency/${selectedCurrency.Id}`, values)
-          : await axiosInstance.post("/currency", values);
+        const response = selectedSegment
+          ? await axiosInstance.put(
+              `/investment/segment/${selectedSegment.Id}`,
+              values
+            )
+          : await axiosInstance.post("/investment/segment", values);
 
         const result = response.data;
 
         if (result.success) {
           handleCloseModal();
-          fetchCurrencies();
+          fetchSegments();
         } else {
-          console.error("Failed to save currency:", result.error);
+          console.error("Failed to save investment segment:", result.error);
           alert(`Error: ${result.message || result.error}`);
         }
       } catch (error) {
-        console.error("Error saving currency:", error);
-        alert("Failed to save currency");
+        console.error("Error saving investment segment:", error);
+        alert("Failed to save investment segment");
       }
     },
   });
@@ -115,41 +107,40 @@ export default function CurrencyPage() {
         return;
       }
 
-      fetchCurrencies();
+      fetchSegments();
     };
 
     checkAuth();
   }, [router, supabase.auth]);
 
-  const fetchCurrencies = async () => {
+  const fetchSegments = async () => {
     try {
       setIsLoading(true);
-      const response = await axiosInstance.get("/currency");
+      const response = await axiosInstance.get("/investment/segment");
       const result = response.data;
 
       if (result.success) {
-        setCurrencies(result.data);
+        setSegments(result.data);
       } else {
-        console.error("Failed to fetch currencies:", result.error);
+        console.error("Failed to fetch investment segments:", result.error);
       }
     } catch (error) {
-      console.error("Error fetching currencies:", error);
+      console.error("Error fetching investment segments:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleOpenModal = (currency?: Currency) => {
-    if (currency) {
-      setSelectedCurrency(currency);
+  const handleOpenModal = (segment?: InvestmentSegment) => {
+    if (segment) {
+      setSelectedSegment(segment);
       formik.setValues({
-        name: currency.Name,
-        currencyCode: currency.CurrencyCode,
-        currencySymbol: currency.CurrencySymbol,
-        isActive: currency.IsActive,
+        category: segment.Category,
+        description: segment.Description || "",
+        isActive: segment.IsActive,
       });
     } else {
-      setSelectedCurrency(null);
+      setSelectedSegment(null);
       formik.resetForm();
     }
     setIsModalOpen(true);
@@ -157,45 +148,45 @@ export default function CurrencyPage() {
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setSelectedCurrency(null);
+    setSelectedSegment(null);
     formik.resetForm();
   };
 
   const handleDelete = async () => {
-    if (!selectedCurrency) return;
+    if (!selectedSegment) return;
 
     try {
       setIsDeleting(true);
 
       const response = await axiosInstance.delete(
-        `/currency/${selectedCurrency.Id}`
+        `/investment/segment/${selectedSegment.Id}`
       );
       const result = response.data;
 
       if (result.success) {
         setIsDeleteModalOpen(false);
-        setSelectedCurrency(null);
-        fetchCurrencies();
+        setSelectedSegment(null);
+        fetchSegments();
       } else {
-        console.error("Failed to delete currency:", result.error);
+        console.error("Failed to delete investment segment:", result.error);
         alert(`Error: ${result.message || result.error}`);
       }
     } catch (error) {
-      console.error("Error deleting currency:", error);
-      alert("Failed to delete currency");
+      console.error("Error deleting investment segment:", error);
+      alert("Failed to delete investment segment");
     } finally {
       setIsDeleting(false);
     }
   };
 
-  const openDeleteModal = (currency: Currency) => {
-    setSelectedCurrency(currency);
+  const openDeleteModal = (segment: InvestmentSegment) => {
+    setSelectedSegment(segment);
     setIsDeleteModalOpen(true);
   };
 
   const closeDeleteModal = () => {
     setIsDeleteModalOpen(false);
-    setSelectedCurrency(null);
+    setSelectedSegment(null);
   };
 
   if (isLoading) {
@@ -215,46 +206,48 @@ export default function CurrencyPage() {
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h1 className="text-4xl font-bold text-foreground">Currency</h1>
-            <p className="mt-2 text-default-500">Manage currency master data</p>
+            <h1 className="text-4xl font-bold text-foreground">
+              Investment Segment
+            </h1>
+            <p className="mt-2 text-default-500">
+              Manage investment segment master data
+            </p>
           </div>
           <Button
             color="primary"
             startContent={<FiPlus className="text-lg" />}
             onPress={() => handleOpenModal()}
           >
-            Add Currency
+            Add Segment
           </Button>
         </div>
 
-        {/* Currency Table */}
+        {/* Segment Table */}
         <Table
-          aria-label="Currency table"
+          aria-label="Investment segment table"
           className="max-h-[70vh] overflow-auto"
           isHeaderSticky
         >
           <TableHeader>
             <TableColumn>ID</TableColumn>
-            <TableColumn>NAME</TableColumn>
-            <TableColumn>CODE</TableColumn>
-            <TableColumn>SYMBOL</TableColumn>
+            <TableColumn>CATEGORY</TableColumn>
+            <TableColumn>DESCRIPTION</TableColumn>
             <TableColumn>STATUS</TableColumn>
             <TableColumn>ACTIONS</TableColumn>
           </TableHeader>
           <TableBody>
-            {currencies.map((currency) => (
-              <TableRow key={currency.Id}>
-                <TableCell>{currency.Id}</TableCell>
-                <TableCell>{currency.Name}</TableCell>
-                <TableCell>{currency.CurrencyCode}</TableCell>
-                <TableCell>{currency.CurrencySymbol}</TableCell>
+            {segments.map((segment) => (
+              <TableRow key={segment.Id}>
+                <TableCell>{segment.Id}</TableCell>
+                <TableCell>{segment.Category}</TableCell>
+                <TableCell>{segment.Description || "-"}</TableCell>
                 <TableCell>
                   <Chip
-                    color={currency.IsActive ? "success" : "default"}
+                    color={segment.IsActive ? "success" : "default"}
                     size="sm"
                     variant="flat"
                   >
-                    {currency.IsActive ? "Active" : "Inactive"}
+                    {segment.IsActive ? "Active" : "Inactive"}
                   </Chip>
                 </TableCell>
                 <TableCell>
@@ -264,7 +257,7 @@ export default function CurrencyPage() {
                       variant="light"
                       color="primary"
                       isIconOnly
-                      onPress={() => handleOpenModal(currency)}
+                      onPress={() => handleOpenModal(segment)}
                     >
                       <FiEdit2 />
                     </Button>
@@ -273,7 +266,7 @@ export default function CurrencyPage() {
                       variant="light"
                       color="danger"
                       isIconOnly
-                      onPress={() => openDeleteModal(currency)}
+                      onPress={() => openDeleteModal(segment)}
                     >
                       <FiTrash2 />
                     </Button>
@@ -289,58 +282,38 @@ export default function CurrencyPage() {
           <ModalContent>
             <form onSubmit={formik.handleSubmit}>
               <ModalHeader>
-                {selectedCurrency ? "Edit Currency" : "Add Currency"}
+                {selectedSegment ? "Edit Segment" : "Add Segment"}
               </ModalHeader>
               <ModalBody>
                 <div className="space-y-4">
                   <Input
-                    label="Name"
-                    placeholder="Enter currency name"
-                    name="name"
-                    value={formik.values.name}
+                    label="Category"
+                    placeholder="Enter category name"
+                    name="category"
+                    value={formik.values.category}
                     onChange={formik.handleChange}
                     onBlur={formik.handleBlur}
-                    isInvalid={formik.touched.name && !!formik.errors.name}
-                    errorMessage={formik.touched.name && formik.errors.name}
-                    isRequired
-                  />
-                  <Input
-                    label="Currency Code"
-                    placeholder="Enter currency code (e.g., USD, EUR)"
-                    name="currencyCode"
-                    value={formik.values.currencyCode}
-                    onChange={(e) => {
-                      formik.setFieldValue(
-                        "currencyCode",
-                        e.target.value.toUpperCase()
-                      );
-                    }}
-                    onBlur={formik.handleBlur}
                     isInvalid={
-                      formik.touched.currencyCode &&
-                      !!formik.errors.currencyCode
+                      formik.touched.category && !!formik.errors.category
                     }
                     errorMessage={
-                      formik.touched.currencyCode && formik.errors.currencyCode
+                      formik.touched.category && formik.errors.category
                     }
                     isRequired
                   />
                   <Input
-                    label="Currency Symbol"
-                    placeholder="Enter currency symbol (e.g., $, €)"
-                    name="currencySymbol"
-                    value={formik.values.currencySymbol}
+                    label="Description"
+                    placeholder="Enter description (optional)"
+                    name="description"
+                    value={formik.values.description}
                     onChange={formik.handleChange}
                     onBlur={formik.handleBlur}
                     isInvalid={
-                      formik.touched.currencySymbol &&
-                      !!formik.errors.currencySymbol
+                      formik.touched.description && !!formik.errors.description
                     }
                     errorMessage={
-                      formik.touched.currencySymbol &&
-                      formik.errors.currencySymbol
+                      formik.touched.description && formik.errors.description
                     }
-                    isRequired
                   />
                   <Switch
                     name="isActive"
@@ -362,7 +335,7 @@ export default function CurrencyPage() {
                   type="submit"
                   isLoading={formik.isSubmitting}
                 >
-                  {selectedCurrency ? "Update" : "Create"}
+                  {selectedSegment ? "Update" : "Create"}
                 </Button>
               </ModalFooter>
             </form>
@@ -375,8 +348,8 @@ export default function CurrencyPage() {
             <ModalHeader>Confirm Delete</ModalHeader>
             <ModalBody>
               <p>
-                Are you sure you want to delete the currency{" "}
-                <strong>{selectedCurrency?.Name}</strong>?
+                Are you sure you want to delete the segment{" "}
+                <strong>{selectedSegment?.Category}</strong>?
               </p>
             </ModalBody>
             <ModalFooter>
